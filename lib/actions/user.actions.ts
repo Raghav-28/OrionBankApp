@@ -4,9 +4,12 @@ import { ID } from 'node-appwrite';
 import { cookies } from 'next/headers';
 import { parseStringify } from '../utils';
 
-export const signIn  = async () => {
+export const signIn  = async ({email,password}:signInProps) => {
   try {
-    
+    const {account} = await createAdminClient();
+    const response = await account.createEmailPasswordSession(email,password);
+
+    return parseStringify(response);
   } catch (error) {
     console.log('Error',error);
   }
@@ -14,6 +17,7 @@ export const signIn  = async () => {
 export const signUp  = async (userData:SignUpParams) => {
     const {email,password,firstName,lastName} = userData;
     try {
+      console.log("Sign-up payload:", { email, password, firstName, lastName });
         const {account} = await createAdminClient();
         const newUserAccount = await account.create(
             ID.unique(),
@@ -37,9 +41,20 @@ export const signUp  = async (userData:SignUpParams) => {
   export async function getLoggedInUser() {
     try {
         const {account} = await createSessionClient();
-        return await account.get(); 
+        const user = await account.get(); 
+        return parseStringify(user);
     } catch (error) {
         console.log(error)
         return null;
+    }
+  }
+  export const  logoutAccount  = async ()=>{
+    try {
+      const {account} = await createSessionClient();
+      cookies().delete('appwrite-session')
+      await account.deleteSession('current');
+    } catch (error) {
+      console.log(error)
+      return null
     }
   }
