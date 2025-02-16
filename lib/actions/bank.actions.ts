@@ -1,18 +1,13 @@
 "use server";
 
 import {
-  ACHClass,
   CountryCode,
-  TransferAuthorizationCreateRequest,
-  TransferCreateRequest,
-  TransferNetwork,
-  TransferType,
 } from "plaid";
 
 import { plaidClient } from "../plaid";
 import { parseStringify } from "../utils";
 
-// import { getTransactionsByBankId } from "./transaction.actions";
+import { getTransactionsByBankId } from "./transaction.actions";
 import { getBanks, getBank } from "./user.actions";
 
 // Get multiple bank accounts
@@ -76,21 +71,21 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     const accountData = accountsResponse.data.accounts[0];
 
     // get transfer transactions from appwrite
-    // const transferTransactionsData = await getTransactionsByBankId({
-    //   bankId: bank.$id,
-    // });
+    const transferTransactionsData = await getTransactionsByBankId({
+      bankId: bank.$id,
+    });
 
-    // const transferTransactions = transferTransactionsData.documents.map(
-    //   (transferData: Transaction) => ({
-    //     id: transferData.$id,
-    //     name: transferData.name!,
-    //     amount: transferData.amount!,
-    //     date: transferData.$createdAt,
-    //     paymentChannel: transferData.channel,
-    //     category: transferData.category,
-    //     type: transferData.senderBankId === bank.$id ? "debit" : "credit",
-    //   })
-    // );
+    const transferTransactions = transferTransactionsData.documents.map(
+      (transferData: Transaction) => ({
+        id: transferData.$id,
+        name: transferData.name!,
+        amount: transferData.amount!,
+        date: transferData.$createdAt,
+        paymentChannel: transferData.channel,
+        category: transferData.category,
+        type: transferData.senderBankId === bank.$id ? "debit" : "credit",
+      })
+    );
 
     // get institution info from plaid
     const institution = await getInstitution({
@@ -151,47 +146,35 @@ export const getTransactions = async ({
   accessToken,
 }: getTransactionsProps) => {
   let hasMore = true;
-  let transactions: any[] = []; // Initialize as an empty array
-  let nextCursor: string | undefined = undefined; // For pagination
+  let transactions: any = [];
 
   try {
     // Iterate through each page of new transaction updates for item
     while (hasMore) {
       const response = await plaidClient.transactionsSync({
         access_token: accessToken,
-        cursor: nextCursor, // Use the cursor for pagination
       });
 
       const data = response.data;
 
-      // Ensure data.added is an array before mapping
-      if (Array.isArray(data.added)) {
-        const newTransactions = data.added.map((transaction) => ({
-          id: transaction.transaction_id,
-          name: transaction.name,
-          paymentChannel: transaction.payment_channel,
-          type: transaction.payment_channel,
-          accountId: transaction.account_id,
-          amount: transaction.amount,
-          pending: transaction.pending,
-          category: transaction.category ? transaction.category[0] : "",
-          date: transaction.date,
-          image: transaction.logo_url,
-        }));
+      transactions = response.data.added.map((transaction) => ({
+        id: transaction.transaction_id,
+        name: transaction.name,
+        paymentChannel: transaction.payment_channel,
+        type: transaction.payment_channel,
+        accountId: transaction.account_id,
+        amount: transaction.amount,
+        pending: transaction.pending,
+        category: transaction.category ? transaction.category[0] : "",
+        date: transaction.date,
+        image: transaction.logo_url,
+      }));
 
-        // Accumulate transactions
-        transactions = [...transactions, ...newTransactions];
-      }
-
-      // Update pagination variables
       hasMore = data.has_more;
-      nextCursor = data.next_cursor;
     }
 
-    // Return the accumulated transactions
     return parseStringify(transactions);
   } catch (error) {
-    console.error("An error occurred while getting the transactions:", error);
-    throw error; // Re-throw the error to handle it in the calling function
+    console.error("An error occurred while getting the accounts:", error);
   }
 };
