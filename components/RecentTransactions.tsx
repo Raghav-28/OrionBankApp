@@ -3,6 +3,7 @@ import Link from 'next/link'
 import React from 'react'
 import { BankTabItem } from './BankTabItem'
 import BankInfo from './BankInfo'
+import TransactionsTable from './TransactionsTable'
 
 const RecentTransactions = ({
     accounts,
@@ -49,8 +50,8 @@ const RecentTransactions = ({
               type="full"
             />
 
-            {/* <TransactionsTable  /> */}
-            {/* transactions={currentTransactions} */}
+            <TransactionsTable  transactions={transactions} />
+           
 
             {/* {totalPages > 1 && (
               <div className="my-4 w-full">
