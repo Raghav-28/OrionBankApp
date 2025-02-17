@@ -9,11 +9,11 @@ import {
   TransferType,
 } from "plaid";
 
-import { plaidClient } from "../plaid";
 import { parseStringify } from "../utils";
 
 import { getTransactionsByBankId } from "./transaction.actions";
 import { getBanks, getBank } from "./user.actions";
+import { plaidClient } from "../plaid";
 
 // Get multiple bank accounts
 export const getAccounts = async ({ userId }: getAccountsProps) => {
@@ -69,10 +69,19 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     // get bank from db
     const bank = await getBank({ documentId: appwriteItemId });
 
+    if (!bank?.accessToken) {
+      throw new Error("Access token is missing or invalid");
+    }
+
     // get account info from plaid
     const accountsResponse = await plaidClient.accountsGet({
       access_token: bank.accessToken,
     });
+
+    if (!accountsResponse || !accountsResponse.data.accounts.length) {
+      throw new Error("No accounts found for the given access token");
+    }
+
     const accountData = accountsResponse.data.accounts[0];
 
     // get transfer transactions from appwrite
@@ -94,12 +103,13 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
 
     // get institution info from plaid
     const institution = await getInstitution({
-      institutionId: accountsResponse.data.item.institution_id!,
+      institutionId: accountsResponse.data.item?.institution_id || "",
     });
 
-    const transactions = await getTransactions({
-      accessToken: bank?.accessToken,
-    });
+    // Fetch transactions and ensure it's an array
+    const transactions = (await getTransactions({ accessToken: bank?.accessToken })) || [];
+
+    console.log("Fetched Transactions:", transactions); // Debugging log
 
     const account = {
       id: accountData.account_id,
@@ -114,8 +124,8 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
       appwriteItemId: bank.$id,
     };
 
-    // sort transactions by date such that the most recent transaction is first
-      const allTransactions = [...transactions, ...transferTransactions].sort(
+    // sort transactions by date
+    const allTransactions = [...transactions, ...transferTransactions].sort(
       (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
     );
 
@@ -127,6 +137,7 @@ export const getAccount = async ({ appwriteItemId }: getAccountProps) => {
     console.error("An error occurred while getting the account:", error);
   }
 };
+
 
 // Get bank info
 export const getInstitution = async ({
@@ -151,18 +162,19 @@ export const getTransactions = async ({
   accessToken,
 }: getTransactionsProps) => {
   let hasMore = true;
-  let transactions: any = [];
+  let transactions: any[] = [];
 
   try {
     // Iterate through each page of new transaction updates for item
     while (hasMore) {
       const response = await plaidClient.transactionsSync({
         access_token: accessToken,
+        cursor:null,
       });
 
       const data = response.data;
 
-      transactions = response.data.added.map((transaction) => ({
+      transactions = response.data.added?.map((transaction) => ({
         id: transaction.transaction_id,
         name: transaction.name,
         paymentChannel: transaction.payment_channel,
@@ -180,6 +192,6 @@ export const getTransactions = async ({
 
     return parseStringify(transactions);
   } catch (error) {
-    console.error("An error occurred while getting the accounts:", error);
+    console.error("Plaid API Error:", error.response?.data || error.message);
   }
 };
